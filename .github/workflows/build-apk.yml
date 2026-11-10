@@ -1,0 +1,99 @@
+name: Build SMC Video Editor APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install tools
+        run: npm install
+
+      - name: Prepare the web app
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
+
+      - name: Create the Android project
+        run: npx cap add android
+
+      - name: Make the app icon and launch screen
+        run: |
+          pip install pillow
+          python3 - <<'PY'
+          import glob, os
+          from PIL import Image, ImageDraw
+          res = 'android/app/src/main/res'
+          logo = Image.open('icon.png').convert('RGBA')
+
+          def fit(size, pad=1.0, bg=None, circle=False):
+              c = Image.new('RGBA', (size, size), bg or (0, 0, 0, 0))
+              s = int(size * pad)
+              c.alpha_composite(logo.resize((s, s), Image.LANCZOS), ((size - s) // 2, (size - s) // 2))
+              if circle:
+                  m = Image.new('L', (size, size), 0)
+                  ImageDraw.Draw(m).ellipse((0, 0, size - 1, size - 1), fill=255)
+                  o = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+                  o.paste(c, (0, 0), m)
+                  return o
+              return c
+
+          for d, sz in {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}.items():
+              p = f'{res}/mipmap-{d}'
+              os.makedirs(p, exist_ok=True)
+              fit(sz).save(f'{p}/ic_launcher.png')
+              fit(sz, .82, (0, 0, 0, 255), True).save(f'{p}/ic_launcher_round.png')
+          for d, sz in {'mdpi': 108, 'hdpi': 162, 'xhdpi': 216, 'xxhdpi': 324, 'xxxhdpi': 432}.items():
+              p = f'{res}/mipmap-{d}'
+              os.makedirs(p, exist_ok=True)
+              fit(sz, 72 / 108).save(f'{p}/ic_launcher_foreground.png')
+
+          os.makedirs(f'{res}/values', exist_ok=True)
+          open(f'{res}/values/ic_launcher_background.xml', 'w').write(
+              '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="ic_launcher_background">#000000</color>\n</resources>\n')
+
+          for f in glob.glob(f'{res}/drawable*/splash.png'):
+              w, h = Image.open(f).size
+              c = Image.new('RGBA', (w, h), (0, 0, 0, 255))
+              s = int(min(w, h) * .4)
+              c.alpha_composite(logo.resize((s, s), Image.LANCZOS), ((w - s) // 2, (h - s) // 2))
+              c.convert('RGB').save(f)
+          print('icons done')
+          PY
+
+      - name: Lock the app to landscape
+        run: |
+          sed -i 's/<activity/<activity android:screenOrientation="sensorLandscape"/' android/app/src/main/AndroidManifest.xml
+          grep -n "screenOrientation" android/app/src/main/AndroidManifest.xml
+
+      - name: Sync
+        run: npx cap sync android
+
+      - name: Build the APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Save the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMC-Video-Editor-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk

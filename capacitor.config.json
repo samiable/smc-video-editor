@@ -1,0 +1,7 @@
+{
+  "appId": "com.smc.videoeditor",
+  "appName": "SMC Video Editor",
+  "webDir": "www",
+  "backgroundColor": "#0E0F12",
+  "server": { "androidScheme": "https" }
+}

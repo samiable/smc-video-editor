@@ -28,8 +28,12 @@ jobs:
 
       - name: Prepare the web app
         run: |
-          mkdir -p www
-          cp index.html www/index.html
+          mkdir -p www/fonts
+          cp index.html icon.png www/
+          cp node_modules/@fontsource/poppins/files/poppins-latin-600-normal.woff2 www/fonts/ || true
+          cp node_modules/@fontsource/poppins/files/poppins-latin-800-normal.woff2 www/fonts/ || true
+          cp node_modules/@fontsource/dancing-script/files/dancing-script-latin-700-normal.woff2 www/fonts/ || true
+          ls www www/fonts
 
       - name: Create the Android project
         run: npx cap add android
@@ -67,7 +71,7 @@ jobs:
 
           os.makedirs(f'{res}/values', exist_ok=True)
           open(f'{res}/values/ic_launcher_background.xml', 'w').write(
-              '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n <color name="ic_launcher_background">#000000</color>\n</resources>\n')
+              '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#000000</color>\n</resources>\n')
 
           for f in glob.glob(f'{res}/drawable*/splash.png'):
               w, h = Image.open(f).size
@@ -85,6 +89,11 @@ jobs:
 
       - name: Sync
         run: npx cap sync android
+
+      - name: Use the saved signing key
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
 
       - name: Build the APK
         working-directory: android

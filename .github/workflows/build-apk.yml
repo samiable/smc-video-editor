@@ -12,6 +12,15 @@ jobs:
       - name: Get the code
         uses: actions/checkout@v4
 
+      - name: Unpack update.zip if you uploaded one
+        run: |
+          if [ -f update.zip ]; then
+            unzip -o update.zip
+            echo "Unpacked update.zip"
+          else
+            echo "No update.zip found, using the files as they are"
+          fi
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -28,12 +37,24 @@ jobs:
 
       - name: Prepare the web app
         run: |
-          mkdir -p www/fonts
-          cp index.html icon.png www/
+          mkdir -p www/fonts www/wasm www/models/whisper-base/onnx
+          cp index.html icon.png caption-worker.js www/
           cp node_modules/@fontsource/poppins/files/poppins-latin-600-normal.woff2 www/fonts/ || true
           cp node_modules/@fontsource/poppins/files/poppins-latin-800-normal.woff2 www/fonts/ || true
           cp node_modules/@fontsource/dancing-script/files/dancing-script-latin-700-normal.woff2 www/fonts/ || true
-          ls www www/fonts
+          cp node_modules/@xenova/transformers/dist/transformers.min.js www/ || echo "speech library missing"
+          cp node_modules/onnxruntime-web/dist/*.wasm www/wasm/ || echo "speech runtime missing"
+
+      - name: Add the offline speech model for auto captions
+        run: |
+          B=https://huggingface.co/Xenova/whisper-base/resolve/main
+          for f in config.json generation_config.json preprocessor_config.json tokenizer.json tokenizer_config.json normalizer.json vocab.json merges.txt added_tokens.json special_tokens_map.json; do
+            curl -sfL --retry 3 "$B/$f" -o "www/models/whisper-base/$f" || echo "optional file not found: $f"
+          done
+          for f in encoder_model_quantized.onnx decoder_model_merged_quantized.onnx; do
+            curl -sfL --retry 3 "$B/onnx/$f" -o "www/models/whisper-base/onnx/$f" || echo "model file not found: $f"
+          done
+          ls -la www/models/whisper-base www/models/whisper-base/onnx
 
       - name: Create the Android project
         run: npx cap add android
